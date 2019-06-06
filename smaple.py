@@ -1,5 +1,4 @@
-from cgi import parse_header, parse_multipart
-from urllib.parse import parse_qs
+import cgi
 from http.server import BaseHTTPRequestHandler,HTTPServer
 
 class S(BaseHTTPRequestHandler):
@@ -16,26 +15,22 @@ class S(BaseHTTPRequestHandler):
         self._set_headers()
 
     def do_POST(self):
-        ctype, pdict = parse_header(self.headers['content-type'])
-        if ctype == 'multipart/form-data':
-            postvars = parse_multipart(self.rfile, pdict)
-        elif ctype == 'application/x-www-form-urlencoded':
-            length = int(self.headers['content-length'])
-            postvars = parse_qs(
-                self.rfile.read(length),
-                keep_blank_values=1)
-        else:
-            postvars = {}
-        return postvars
-        """
-                # Doesn't do anything with posted data
-        content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
-        post_data = self.rfile.read(content_length)  # <--- Gets the data itself
-        post_data = post_data.decode('utf-8')
         self._set_headers()
-        self.wfile.write("<html><body><h1>POST!</h1></body></html>")
-        :return: 
-        """
+        form = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={'REQUEST_METHOD': 'POST'}
+        )
+
+        if form.getvalue("type") == "image":
+            img = form.getvalue("image")
+
+            out_file = open("img.png", "wb")  # open for [w]riting as [b]inary
+            out_file.write(img)
+            out_file.close()
+            print("image saved")
+
+        #TODO add another request type to create new user
 
 
 
@@ -47,11 +42,4 @@ def run(server_class=HTTPServer, handler_class=S, port=9999):
 
 
 if __name__ == "__main__":
-    """
-        from sys import argv
-
-    if len(argv) == 2:
-        run(port=int(argv[1]))
-    else:
-    """
     run()
