@@ -33,6 +33,11 @@ class S(BaseHTTPRequestHandler):
 
         #TODO add another request type to create new user
 
+def run(server_class=HTTPServer, handler_class=S, port=9999):
+    server_address = ('', port)
+    httpd = server_class(server_address, handler_class)
+    print('Starting httpd...')
+    httpd.serve_forever()
 
 def getConnectionToDB():
     connection = pymysql.connect(host='127.0.0.1',
@@ -43,16 +48,43 @@ def getConnectionToDB():
                                  cursorclass=pymysql.cursors.DictCursor)
     return connection
 
-def run(server_class=HTTPServer, handler_class=S, port=9999):
-    server_address = ('', port)
-    httpd = server_class(server_address, handler_class)
-    print('Starting httpd...')
-    httpd.serve_forever()
 
-def runFacenet(imagesPath = 'userImages'):
+
+def runFacenet():
     mtcnn = fp.MTCNN()
     resnet = fp.InceptionResnetV1(pretrained='casia-webface').eval()
 
+    return mtcnn, resnet
+
+
+def recognize(userEmbeddings, names, recognitionPath = 'imageToRecognize'):
+    # Define a dataset and data loader
+    trans = transforms.Compose([
+        transforms.Resize(1024)
+    ])
+    dataset = datasets.ImageFolder(recognitionPath, transform=trans)
+    dataset.idx_to_class = {i: c for c, i in dataset.class_to_idx.items()}
+    loader = DataLoader(dataset, collate_fn=lambda x: x[0])
+
+    # Perfom MTCNN facial detection
+    aligned = []
+    for x, y in loader:
+        x_aligned, prob = mtcnn(x, return_prob=True)
+        if x_aligned is not None:
+            print('Face detected with probability: {:8f}'.format(prob))
+            aligned.append(x_aligned)
+
+    # Calculate image embeddings
+    aligned = torch.stack(aligned)
+    recognizedEmbedding = resnet(aligned)
+
+    dists = [(e - recognizedEmbedding).norm().item() for e in userEmbeddings]
+    df = pd.DataFrame(dists, index=names, columns=['Dist'])
+
+    #returns recognized index
+    return df.idxmin()
+
+def getEmbeddings(mtcnn, resnet, imagesPath = 'userImages'):
     # Define a dataset and data loader
     trans = transforms.Compose([
         transforms.Resize(1024)
@@ -75,9 +107,10 @@ def runFacenet(imagesPath = 'userImages'):
     aligned = torch.stack(aligned)
     embeddings = resnet(aligned)
 
-    # Print distance matrix for classes
-    dists = [[(e1 - e2).norm().item() for e2 in embeddings] for e1 in embeddings]
-    print(pd.DataFrame(dists, columns=names, index=names))
+    return embeddings, names
+
 if __name__ == "__main__":
-    runFacenet()
-    run()
+    mtcnn, resnet = runFacenet()
+    embeddings, names = getEmbeddings(mtcnn, resnet)
+    print(recognize(embeddings,names)['Dist'])
+    #run()
