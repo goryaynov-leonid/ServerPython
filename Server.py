@@ -4,10 +4,16 @@ from torch.utils.data import DataLoader
 from http.server import BaseHTTPRequestHandler,HTTPServer
 import cgi
 
-import numpy as np
 import pymysql.cursors
 import facenet_pytorch as fp
 from torchvision import transforms, datasets
+
+import os
+
+mtcnn = 'global'
+resnet = 'global'
+embeddings = 'global'
+names = 'global'
 
 class S(BaseHTTPRequestHandler):
     def _set_headers(self):
@@ -23,17 +29,48 @@ class S(BaseHTTPRequestHandler):
             environ={'REQUEST_METHOD': 'POST'}
         )
 
-        if form.getvalue("type") == "image":
+        if form.getvalue("type") == "recognize":
             img = form.getvalue("image")
 
-            out_file = open("img.png", "wb")  # open for [w]riting as [b]inary
+            fileName = 'imageToRecognize/Smth/image.png'
+            os.makedirs(os.path.dirname(fileName), exist_ok=True)
+            out_file = open(fileName, "wb")  # open for [w]riting as [b]inary
             out_file.write(img)
             out_file.close()
-            print("image saved")
+            print(" recognition image saved")
 
-        #TODO add another request type to create new user
+            recognizedIndex = recognize()['Dist']
 
-def run(server_class=HTTPServer, handler_class=S, port=9999):
+            selectSQL = f'select name, surname, description from users where id = {recognizedIndex}'
+
+            connection = getConnectionToDB()
+
+            cursor  = connection.cursor()
+
+            cursor.execute(selectSQL)
+
+            user = cursor.fetchone()
+
+            userName = user['name']
+            userSurname = user['surname']
+            userDescriprion = user['description']
+
+            #TODO send data to client
+        else:
+            index = form.getvalue('index')
+            img = form.getvalue('image')
+
+            fileStorePath = f'userImages/{index}/img.png'
+            os.makedirs(os.path.dirname(fileStorePath), exist_ok=True)
+            out_file = open(fileStorePath, "wb")  # open for [w]riting as [b]inary
+            out_file.write(img)
+            out_file.close()
+            print("new user added")
+
+            self.send_response(200)
+
+
+def runServer(server_class=HTTPServer, handler_class=S, port=9999):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     print('Starting httpd...')
@@ -48,16 +85,13 @@ def getConnectionToDB():
                                  cursorclass=pymysql.cursors.DictCursor)
     return connection
 
-
-
 def runFacenet():
     mtcnn = fp.MTCNN()
     resnet = fp.InceptionResnetV1(pretrained='casia-webface').eval()
 
     return mtcnn, resnet
 
-
-def recognize(userEmbeddings, names, recognitionPath = 'imageToRecognize'):
+def recognize(recognitionPath = 'imageToRecognize'):
     # Define a dataset and data loader
     trans = transforms.Compose([
         transforms.Resize(1024)
@@ -78,13 +112,13 @@ def recognize(userEmbeddings, names, recognitionPath = 'imageToRecognize'):
     aligned = torch.stack(aligned)
     recognizedEmbedding = resnet(aligned)
 
-    dists = [(e - recognizedEmbedding).norm().item() for e in userEmbeddings]
+    dists = [(e - recognizedEmbedding).norm().item() for e in embeddings]
     df = pd.DataFrame(dists, index=names, columns=['Dist'])
 
     #returns recognized index
     return df.idxmin()
 
-def getEmbeddings(mtcnn, resnet, imagesPath = 'userImages'):
+def getEmbeddings(imagesPath = 'userImages'):
     # Define a dataset and data loader
     trans = transforms.Compose([
         transforms.Resize(1024)
@@ -110,7 +144,10 @@ def getEmbeddings(mtcnn, resnet, imagesPath = 'userImages'):
     return embeddings, names
 
 if __name__ == "__main__":
+
+    #run face recognition
     mtcnn, resnet = runFacenet()
-    embeddings, names = getEmbeddings(mtcnn, resnet)
-    print(recognize(embeddings,names)['Dist'])
-    #run()
+    embeddings, names = getEmbeddings()
+
+    #run server
+    runServer()
