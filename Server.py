@@ -8,6 +8,7 @@ import pymysql.cursors
 import facenet_pytorch as fp
 from torchvision import transforms, datasets
 
+import atexit
 import os
 
 mtcnn = 'global'
@@ -143,11 +144,25 @@ def getEmbeddings(imagesPath = 'userImages'):
 
     return embeddings, names
 
+def saveModels(mtcnn, resnet, embeddings, names):
+    torch.save(mtcnn, 'Models/mtcnn')
+    torch.save(resnet, 'Models/resnet')
+    torch.save(embeddings, 'Models/embeddings')
+    torch.save(names, 'Models/names')
+
+def loadModels():
+    mtcnn, resnet = torch.load('Models/mtcnn'), torch.load('Models/resnet')
+    embeddings, names = torch.load('Models/embeddings'), torch.load('Models/names')
+
 if __name__ == "__main__":
 
     #run face recognition
-    mtcnn, resnet = runFacenet()
-    embeddings, names = getEmbeddings()
+    if (os.listdir('Models') == 0):
+        mtcnn, resnet = runFacenet()
+        embeddings, names = getEmbeddings()
+    else:
+        loadModels()
 
+    atexit.register(saveModels(mtcnn, resnet, embeddings, names))
     #run server
-    runServer()
+    #runServer()
