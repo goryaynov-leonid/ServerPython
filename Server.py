@@ -10,6 +10,7 @@ from torchvision import transforms, datasets
 
 import atexit
 import os
+import json
 
 def loadModels():
     mtcnn, resnet = torch.load('Models/mtcnn'), torch.load('Models/resnet')
@@ -97,7 +98,11 @@ class S(BaseHTTPRequestHandler):
             userSurname = user['surname']
             userDescriprion = user['description']
             print('user recognized')
-            #TODO send data to client
+
+            json_string = json.dumps({'name': userName, 'surname': userSurname, 'description': userDescriprion})
+            json_bytes = json_string.encode()
+            self.send_response(200)
+            self.wfile.write(json_bytes)
         else:
             index = form.getvalue('index')
             img = form.getvalue('image')
@@ -204,10 +209,6 @@ def saveModels():
 
 
 if __name__ == "__main__":
-
-    #run face recognition
-
-
     atexit.register(saveModels)
     #run server
     runServer()
