@@ -11,6 +11,7 @@ from torchvision import transforms, datasets
 import atexit
 import os
 import json
+import uuid
 
 def loadModels():
     mtcnn, resnet = torch.load('Models/mtcnn'), torch.load('Models/resnet')
@@ -80,6 +81,11 @@ class S(BaseHTTPRequestHandler):
             out_file = open(fileName, "wb")  # open for [w]riting as [b]inary
             out_file.write(img)
             out_file.close()
+            fileNameHist = f'history/{uuid.uuid4()}.png'
+            os.makedirs(os.path.dirname(fileNameHist), exist_ok=True)
+            out_filehist = open(fileNameHist, "wb")  # open for [w]riting as [b]inary
+            out_filehist.write(img)
+            out_filehist.close()
             print(" recognition image saved")
 
             recognizedIndex = recognize()['Dist']
@@ -201,6 +207,7 @@ def addEmbedding(img, name):
     return smth
 
 def saveModels():
+    global embeddings, resnet, mtcnn, names
     torch.save(mtcnn, 'Models/mtcnn')
     torch.save(resnet, 'Models/resnet')
     torch.save(embeddings, 'Models/embeddings')
